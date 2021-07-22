@@ -1,0 +1,654 @@
+
+#include<stdio.h>
+#include<stdlib.h>
+#include<math.h>
+
+#define SIZE1 181*217
+#define SIZE1_P3 183*219
+#define SIZE1_P5 185*221
+#define SIZE1_P7 187*223
+
+#define SIZE2 512*512
+#define SIZE2_P3 514*514
+#define SIZE2_P5 516*516
+#define SIZE2_P7 518*518
+
+/*Funciones*/
+void padd_zero(int, int, int, unsigned char *, unsigned char *);
+void f_hpass(int, int, int, int *, unsigned char *, unsigned char * );
+
+void padd_zero_B(int, int, int, unsigned short *, unsigned short *);
+void f_hpass_B(int, int, int, int *, unsigned short *, unsigned short * );
+
+/*Arrays*/
+int temp_hp[SIZE1];
+int temp_HP[SIZE2];
+
+int main()
+{
+
+	/* punteros a archivos de entrada y salida */
+	FILE *fpA;
+	FILE *fpA3_out;
+	FILE *fpA5_out;
+	FILE *fpA7_out;
+
+	FILE *fpB;
+	FILE *fpB3_out;
+	FILE *fpB5_out;
+	FILE *fpB7_out;
+
+	FILE *fpD;
+	FILE *fpD3_out;
+	FILE *fpD5_out;
+	FILE *fpD7_out;
+
+
+
+	/* definir un puntero a caracter */
+	unsigned char *bufA; 
+	unsigned char *bufA3_out;
+	unsigned char *bufA5_out;
+	unsigned char *bufA7_out;
+
+	unsigned char *bufB; 
+	unsigned char *bufB3_out;
+	unsigned char *bufB5_out;
+	unsigned char *bufB7_out;
+
+	unsigned short *bufD;
+	unsigned short *bufD3_out;
+	unsigned short *bufD5_out;
+	unsigned short *bufD7_out;
+
+	unsigned char *b_padd_3;
+	unsigned char *b_padd_5;
+	unsigned char *b_padd_7;
+
+	unsigned short *B_padd_3;
+	unsigned short *B_padd_5;
+	unsigned short *B_padd_7;
+	/* Abrir archivo de entrada */
+	if((fpA = fopen("ImagenA.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+	if((fpB = fopen("ImagenB.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+	if((fpD = fopen("img_ec.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+
+
+	/* Reservar memoria para imagen de entrada*/
+	/*Imagen A*/
+	if((bufA = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA3_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA5_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA7_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	/*Imagen B*/
+	if((bufB = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufB3_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufB5_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufB7_out = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	/*Imagen D*/
+	if((bufD = (unsigned short *)malloc(SIZE2*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufD3_out = (unsigned short *)malloc(SIZE2*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufD5_out = (unsigned short *)malloc(SIZE2*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufD7_out = (unsigned short *)malloc(SIZE2*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	/*Padding de 8 bits*/
+	if((b_padd_3 = (unsigned char *)malloc(SIZE1_P3)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((b_padd_5 = (unsigned char *)malloc(SIZE1_P5)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((b_padd_7 = (unsigned char *)malloc(SIZE1_P7)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	/*Padding de 16 bits*/
+	if((B_padd_3 = (unsigned short *)malloc(SIZE2_P3*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((B_padd_5 = (unsigned short *)malloc(SIZE2_P5*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((B_padd_7 = (unsigned short *)malloc(SIZE2_P7*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+
+	/* Leer archivo de entrada*/
+	if((fread(bufA,sizeof(char),SIZE1,fpA)) != SIZE1)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fpA);
+
+	if((fread(bufB,sizeof(char),SIZE1,fpB)) != SIZE1)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fpB);
+
+	if((fread(bufD,sizeof(short),SIZE2,fpD)) != SIZE2)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fpD);
+
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/*Función Padding 8 bits*/
+	void padd_zero(int m, int n, int d, unsigned char *padd, unsigned char *img)
+	{
+		int t = (d-1)/2;
+		for(int i=0; i<(m*n); i++)
+		{
+			padd[i]=255;
+		}
+
+		for (int i=0; i<(m*t); i++)
+		{
+			padd[i] = 0;
+		}
+
+		int k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=0; i<t; i++)
+			{
+				padd[i+k] =0;	
+			}
+		}
+
+		for (int i=(m*n-m*t); i<(m*n); i++)
+		{
+			padd[i] = 0;
+		}
+
+		k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=m-t; i<m; i++)
+			{
+				padd[i+k] = 0;
+			}
+		}
+
+		k = 0;
+		for (int i=0; i<m*n; i++)
+		{
+			if(padd[i]==255)
+			{
+				padd[i] = img[k];
+				k++;
+			}
+			if (k == SIZE1)
+			{
+				break;
+			}
+		}
+	}
+
+	/*Padding 16 bits*/
+	void padd_zero_B(int m, int n, int d, unsigned short *padd, unsigned short *img)
+	{
+		int t = (d-1)/2;
+		for(int i=0; i<(m*n); i++)
+		{
+			padd[i]=255;
+		}
+
+		for (int i=0; i<(m*t); i++)
+		{
+			padd[i] = 0;
+		}
+
+		int k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=0; i<t; i++)
+			{
+				padd[i+k] =0;	
+			}
+		}
+
+		for (int i=(m*n-m*t); i<(m*n); i++)
+		{
+			padd[i] = 0;
+		}
+
+		k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=m-t; i<m; i++)
+			{
+				padd[i+k] = 0;
+			}
+		}
+
+		k = 0;
+		for (int i=0; i<m*n; i++)
+		{
+			if(padd[i]==255)
+			{
+				padd[i] = img[k];
+				k++;
+			}
+			if (k == SIZE2)
+			{
+				break;
+			}
+		}
+	}
+	
+	/*Filtro pasa alto 8 bits*/
+	void f_hpass(int m, int n, int d, int * temp, unsigned char *padd, unsigned char * img_f)
+	{
+		int a = (d-1)/2;
+		int k_m = 0;
+		int min = 0;
+		int max = 0;
+		int cof;		
+		for(int i=0; i<SIZE1; i++)
+		{
+			temp[i]=0;	//array temporal, se utiliza para no tener inconvenientes con valores 
+		}				//negativos o mayores a 255
+		for(int t = a; t<(n-a); t++)	//Va saltando filas hasta la n-ésima
+		{
+			int c = t*m;
+			for(int k=a+c; k<(m-a+c); k++)		//Va recorriendo la fila cuyo indice es t
+			{
+				int aux = 0;
+				for(int i=-a; i<=a; i++)	//Permite recorrer el filtro por filas
+				{
+					for(int j=(-a*m); j<=(a*m); j+=m)	//Permite recorrer el filtro por columnas
+					{
+						if ((i==0)&&(j==0))
+						{
+							cof = d*d-1;
+						}else{
+							cof = -1;
+						}
+						aux = aux + cof*padd[k+j+i];
+					}
+				}
+				aux = aux/(d*d);
+				if (aux < min)
+				{
+					min = aux;
+				}
+				if (aux > max)
+				{
+					max = aux;
+				}
+				temp[k_m] = aux;
+				k_m++;
+			}
+		}
+		int elem;
+		for(int lm = 0; lm<SIZE1; lm++)
+		{
+			elem = 255.0*(temp[lm]-min)/(max-min);	//Reescalea los valores obtenidos por el
+			img_f[lm] = (unsigned char)elem;	//filtro a valores entre 0 y 255
+		}
+	}
+
+	/*Filtro pasa alto*/
+	void f_hpass_B(int m, int n, int d, int *temp, unsigned short *padd, unsigned short * img_f)
+	{
+		int a = (d-1)/2;
+		int k_m = 0;
+		int min = 0;
+		int max =10;
+		int cof;		
+		for(int i=0; i<SIZE2; i++)
+		{
+			temp[i]=0;
+		}
+		for(int t = a; t<(n-a); t++)	//Va saltando filas hasta la n-ésima
+		{
+			int c = t*m;
+			for(int k=a+c; k<(m-a+c); k++)		//Va recorriendo la fila cuyo indice es t
+			{
+				int aux = 0;
+				for(int i=-a; i<=a; i++)	//Permite recorrer el filtro por filas
+				{
+					for(int j=(-a*m); j<=(a*m); j+=m)	//Permite recorrer el filtro por columnas
+					{
+						if ((i==0)&&(j==0))
+						{
+							cof = d*d-1;
+						}else{
+							cof = -1;
+						}
+						aux = aux + cof*padd[k+j+i];
+					}
+				}
+				aux = 1.0*aux/(d*d);
+				if (aux < min)
+				{
+					min = aux;
+				}
+				if (aux > max)
+				{
+					max = aux;
+				}
+				temp[k_m] = aux;
+				k_m++;
+			}
+		}
+		int elem;
+		for(int lm = 0; lm<SIZE2; lm++)
+		{
+			elem = 255.0*(temp[lm]-min)/(max-min);
+			img_f[lm] = (unsigned short)elem;
+		}
+
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*Aplicando funciones*/
+		/*Imagen A*/
+	for (int i=0; i<SIZE1; i++)	//Me aseguro que no haya nada en memoria
+	{
+		bufA3_out[i] = 0;
+	}
+	for (int i=0; i<SIZE1; i++)
+	{
+		bufA5_out[i] = 0;
+	}
+	for (int i=0; i<SIZE1; i++)
+	{
+		bufA7_out[i] = 0;
+	}
+		/*Filtro 3x3*/
+	padd_zero(183, 219, 3,b_padd_3, bufA); 
+	f_hpass(183, 219, 3, temp_hp, b_padd_3, bufA3_out);
+		/*Filtro 5x5*/
+	padd_zero(185, 221, 5, b_padd_5, bufA); 
+	f_hpass(185, 221, 5, temp_hp, b_padd_5, bufA5_out);
+		/*Filtro 7x7*/
+	padd_zero(187, 223, 7, b_padd_7, bufA); 
+	f_hpass(187, 223, 7, temp_hp, b_padd_7, bufA7_out);
+
+
+		/*Imagen B*/
+	for (int i=0; i<SIZE1; i++)	//Me aseguro que no haya nada en memoria
+	{
+		bufB3_out[i] = 0;
+	}
+	for (int i=0; i<SIZE1; i++)
+	{
+		bufB5_out[i] = 0;
+	}
+	for (int i=0; i<SIZE1; i++)
+	{
+		bufB7_out[i] = 0;
+	}
+		/*Filtro 3x3*/
+	padd_zero(183, 219, 3, b_padd_3, bufB); 
+	f_hpass(183, 219, 3, temp_hp, b_padd_3, bufB3_out);
+		/*Filtro 5x5*/
+	padd_zero(185, 221, 5, b_padd_5, bufB); 
+	f_hpass(185, 221, 5, temp_hp, b_padd_5, bufB5_out);
+		/*Filtro 7x7*/
+	padd_zero(187, 223, 7, b_padd_7, bufB); 
+	f_hpass(187, 223, 7, temp_hp, b_padd_7, bufB7_out);
+
+		/*Imagen D*/
+	for (int i=0; i<SIZE2; i++)	//Me aseguro que no haya nada en memoria
+	{
+		bufD3_out[i] = 0;
+	}
+	for (int i=0; i<SIZE2; i++)
+	{
+		bufD5_out[i] = 0;
+	}
+	for (int i=0; i<SIZE2; i++)
+	{
+		bufD7_out[i] = 0;
+	}
+
+		/*Filtro 3x3*/
+	padd_zero_B(514, 514, 3, B_padd_3, bufD);
+	f_hpass_B(514, 514, 3, temp_HP, B_padd_3, bufD3_out);
+		/*Filtro 5x5*/
+	padd_zero_B(516, 516, 5, B_padd_5, bufD);
+	f_hpass_B(516, 516, 5, temp_HP, B_padd_5, bufD5_out);
+		/*Filtro 7x7*/
+	padd_zero_B(518, 518, 7, B_padd_7, bufD);
+	f_hpass_B(518, 518, 7, temp_HP, B_padd_7, bufD7_out);
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*Abrir archivos de salida*/
+	/*Imagen A*/
+	if((fpA3_out = fopen("imgA_hp_3.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpA5_out = fopen("imgA_hp_5.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpA7_out = fopen("imgA_hp_7.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	/*Imagen B*/
+	if((fpB3_out = fopen("imgB_hp_3.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpB5_out = fopen("imgB_hp_5.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpB7_out = fopen("imgB_hp_7.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+
+	/*Imagen D*/
+	if((fpD3_out = fopen("imgD_hp_3.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpD5_out = fopen("imgD_hp_5.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpD7_out = fopen("imgD_hp_7.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*Escribir archivo de salida*/
+	/*Imagen A*/
+	if((fwrite(bufA3_out, sizeof(char), SIZE1, fpA3_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA3_out);
+
+	if((fwrite(bufA5_out, sizeof(char), SIZE1, fpA5_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA5_out);
+
+	if((fwrite(bufA7_out, sizeof(char), SIZE1, fpA7_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA7_out);
+
+
+	/*Imagen B*/
+	if((fwrite(bufB3_out, sizeof(char), SIZE1, fpB3_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpB3_out);
+
+	if((fwrite(bufB5_out, sizeof(char), SIZE1, fpB5_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpB5_out);
+
+	if((fwrite(bufB7_out, sizeof(char), SIZE1, fpB7_out) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpB7_out);
+
+	/*Imagen D*/
+	if((fwrite(bufD3_out, sizeof(short), SIZE2, fpD3_out) != SIZE2))
+	{
+		fprintf(stderr,"ERROR: can't write file D1\n");
+		exit(1);
+	}
+	fclose(fpD3_out);
+
+	if((fwrite(bufD5_out, sizeof(short), SIZE2, fpD5_out) != SIZE2))
+	{
+		fprintf(stderr,"ERROR: can't write file D2\n");
+		exit(1);
+	}
+	fclose(fpD5_out);
+
+	if((fwrite(bufD7_out, sizeof(short), SIZE2, fpD7_out) != SIZE2))
+	{
+		fprintf(stderr,"ERROR: can't write file D3\n");
+		exit(1);
+	}
+	fclose(fpD7_out);
+
+	return 0;
+}
