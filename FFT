@@ -1,0 +1,781 @@
+* Hace FFT de una imagen, multiplica por un filtro y
+hace IFFT de ese producto.  El filtro debe ser provisto
+como una imagen tipo float del mismo tamaño de la imagen */
+/* Importante: si la imagen de entrada esta en el rango
+(0-255) leerla con una variable tipo uchar */
+/* Salida: parte real, imaginaria o modulo como imagen float */
+
+
+#include<stdio.h>
+#include<stdlib.h>
+#include<math.h>
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef struct {float re; float im;} COMPLEX;
+typedef struct {double re; double im;} DPCOMPLEX;
+
+
+#define FORWARD	0
+#define INVERSE 1
+
+#define ERROR -1
+#define NO_ERROR 0
+
+
+#define PI      3.1415926535897932
+#define TWOPI   6.2831853071795865 /* 2.0 * PI */
+#define HALFPI  1.5707963267948966 /* PI / 2.0 *
+#define PI8 	0.392699081698724 /* PI / 8.0 */
+#define RT2 	1.4142135623731  /* sqrt(2.0) */
+#define IRT2 	0.707106781186548  /* 1.0/sqrt(2.0) */
+
+DPCOMPLEX 	*stageBuff;  /* buffer to hold a row or column at a time */
+COMPLEX 	*bigBuff;    /* a pointer to the input array */
+//extern char     *malloc();
+
+
+/* entry points defined in this file */
+extern int forward_fft();
+extern int inverse_fft();
+extern int fft();
+extern void FFT842();
+extern void R2TX();
+extern void R4TX();
+extern void R8TX();
+extern int power_of_2();
+extern int fastlog2();
+extern int allocateBuffer();
+extern void freeBuffer();
+
+
+/*
+ *	These macros move complex data between bigBuff and
+ *	stageBuff
+ */
+
+#define LoadRow(row,cols) if (1==1){\
+    register int j,k;\
+    for (j = row*cols, k = 0 ; k < cols ; j++, k++){\
+	stageBuff[k].re = bigBuff[j].re;\
+	stageBuff[k].im = bigBuff[j].im;\
+	}\
+    } else
+
+#define StoreRow(row,cols) if (1==1){\
+    register int j,k;\
+    for (j = row*cols, k = 0 ; k < cols ; j++, k++){\
+	bigBuff[j].re = stageBuff[k].re;\
+	bigBuff[j].im = stageBuff[k].im;\
+	}\
+    } else
+
+#define LoadCol(col,rows,cols) if (1==1){\
+    register int j,k;\
+    for (j = i,k = 0 ; k < rows ; j+=cols, k++){\
+	stageBuff[k].re = bigBuff[j].re;\
+	stageBuff[k].im = bigBuff[j].im;\
+	}\
+    } else
+
+#define StoreCol(col,rows,cols) if (1==1){\
+    register int j,k;\
+    for (j = i,k = 0 ; k < rows ; j+=cols, k++){\
+	bigBuff[j].re = stageBuff[k].re;\
+	bigBuff[j].im = stageBuff[k].im;\
+	}\
+    } else
+
+
+/* do something with an error message */
+#define handle_error(msg) fprintf(stderr,msg)
+
+
+/* do forward transform.  array must be COMPLEX  */
+int
+forward_fft(array, rows, cols)
+     COMPLEX * array;
+     int rows,cols;
+{
+	return(fft(array, rows, cols, FORWARD));
+}
+
+/* do inverse transform. array must be COMPLEX  */
+int
+inverse_fft(array, rows, cols)
+     COMPLEX * array;
+     int rows,cols;
+{
+	return(fft(array, rows, cols, INVERSE));
+}
+
+
+
+/* 
+** compute DFT: forward if direction==0, inverse if direction==1
+** array must be COMPLEX 
+*/ 
+int
+fft(array, rows, cols, direction)
+     COMPLEX * array;
+     int rows, cols, direction;
+{
+  int i, msize, errflg;
+  
+  if(!power_of_2(rows) || !power_of_2(cols)) {
+    handle_error("complex_fft: input array must have dimensions a power of 2");
+    return(ERROR);
+  }
+  
+  /* allocate 1D buffer */
+  bigBuff = array;
+  msize = rows>cols ? rows : cols;
+  errflg = allocateBuffer(msize);
+  if(errflg != NO_ERROR) return(errflg);
+
+
+  /* compute transform row by row */
+  
+  if(cols>1)
+    for(i=0;i<rows;i++) 
+      {
+	LoadRow(i,cols);
+	FFT842(direction,cols,stageBuff);
+	StoreRow(i,cols);
+      }
+  
+  if(rows<2) /* done */
+    {
+      freeBuffer();return(NO_ERROR);
+    }
+  
+
+  /* compute transform column by column */
+
+  for(i=0;i<cols;i++) 
+    {
+      LoadCol(i,rows,cols);
+      FFT842(direction,rows,stageBuff);
+      StoreCol(i,rows,cols);
+    }
+
+  freeBuffer();
+
+  return(NO_ERROR);
+
+}
+
+
+
+/*
+** FFT842
+** This routine replaces the input DPCOMPLEX vector by its
+** finite discrete complex fourier transform if in==0.
+** It replaces the input DPCOMPLEX vector by its
+** finite discrete complex inverse fourier transform if in==1.
+**
+** It performs as many base 8 iterations as possible and
+** then finishes with a base 4 iteration or a base 2 
+** iteration if needed.
+**
+** Ported from the FORTRAN code in Programming for Digital Signal Processing,
+** IEEE Press 1979, Section 1, by G. D. Bergland and M. T. Dolan
+**
+*/
+void
+FFT842(in,n,b)
+     int in; /* FORWARD or INVERSE */
+     int n;  /* length of vector */
+     DPCOMPLEX *b; /* input vector */
+{
+  double fn, r, fi;
+
+  int L[16],L1,L2,L3,L4,L5,L6,L7,L8,L9,L10,L11,L12,L13,L14,L15;
+  int j0,j1,j2,j3,j4,j5,j6,j7,j8,j9,j10,j11,j12,j13,j14;
+  int i, j, ij, ji, ij1, ji1;
+  int nn, n2pow, n8pow, nthpo, ipass, nxtlt, lengt;
+
+  n2pow = fastlog2(n);
+  nthpo = n;
+  fn = 1.0 / (double)nthpo;
+  
+  
+  if(in==FORWARD) 
+    /* take conjugate  */
+    for(i=0;i<n;i++) {
+      b[i].im *= -1.0;
+    }
+  
+  if(in==INVERSE)
+    /* scramble inputs */
+    for(i=0,j=n/2;j<n;i++,j++) 
+      {
+	r = b[j].re; fi = b[j].im;
+	b[j].re = b[i].re; b[j].im = b[i].im;
+	b[i].re = r; b[i].im = fi;
+      }
+  
+  n8pow = n2pow/3;
+  
+  if(n8pow) 
+    {
+      /* radix 8 iterations */
+      for(ipass=1;ipass<=n8pow;ipass++) 
+	{
+	  nxtlt = 0x1 << (n2pow - 3*ipass);
+	  lengt = 8*nxtlt;
+	  R8TX(nxtlt,nthpo,lengt,
+	       b,b+nxtlt,b+2*nxtlt,
+	       b+3*nxtlt,b+4*nxtlt,b+5*nxtlt,
+	       b+6*nxtlt,b+7*nxtlt);
+	}
+    }
+  
+  if(n2pow%3 == 1) 
+    {
+      /* radix 2 iteration needed */
+	R2TX(nthpo,b,b+1); 
+    }
+  
+
+  if(n2pow%3 == 2)  
+    {
+      /* radix 4 iteration needed */
+      R4TX(nthpo,b,b+1,b+2,b+3); 
+    }
+  
+
+
+  for(j=1;j<=15;j++) 
+    {
+      L[j] = 1;
+      if(j-n2pow <= 0) L[j] = 0x1 << (n2pow + 1 - j);
+    }
+  L15=L[1];L14=L[2];L13=L[3];L12=L[4];L11=L[5];L10=L[6];L9=L[7];
+  L8=L[8];L7=L[9];L6=L[10];L5=L[11];L4=L[12];L3=L[13];L2=L[14];L1=L[15];
+
+  ij = 1;
+    
+  for(j1=1;j1<=L1;j1++)
+  for(j2=j1;j2<=L2;j2+=L1)
+  for(j3=j2;j3<=L3;j3+=L2)
+  for(j4=j3;j4<=L4;j4+=L3)
+  for(j5=j4;j5<=L5;j5+=L4)
+  for(j6=j5;j6<=L6;j6+=L5)
+  for(j7=j6;j7<=L7;j7+=L6)
+  for(j8=j7;j8<=L8;j8+=L7)
+  for(j9=j8;j9<=L9;j9+=L8)
+  for(j10=j9;j10<=L10;j10+=L9)
+  for(j11=j10;j11<=L11;j11+=L10)
+  for(j12=j11;j12<=L12;j12+=L11)
+  for(j13=j12;j13<=L13;j13+=L12)
+  for(j14=j13;j14<=L14;j14+=L13)
+  for(ji=j14;ji<=L15;ji+=L14) 
+    {
+      ij1 = ij-1;
+      ji1 = ji-1;
+      
+      if(ij-ji<0) 
+	{
+	  r = b[ij1].re;
+	  b[ij1].re = b[ji1].re;
+	  b[ji1].re = r;
+	  fi = b[ij1].im;
+	  b[ij1].im = b[ji1].im;
+	  b[ji1].im = fi;
+	}
+      ij++;
+    }
+
+  if(in==FORWARD)  /* take conjugates & unscramble outputs */
+    for(i=0,j=n/2;j<n;i++,j++)
+	{
+	  r = b[j].re; fi = b[j].im;
+	  b[j].re = b[i].re; b[j].im = -b[i].im;
+	  b[i].re = r; b[i].im = -fi;
+	}
+
+  if(in==INVERSE) /* scale outputs */
+    for(i=0;i<nthpo;i++) 
+      {
+	b[i].re *= fn;
+	b[i].im *= fn;
+      }
+  
+
+}
+
+
+/*
+** radix 2 iteration subroutine
+*/
+void
+R2TX(nthpo,c0,c1)
+     DPCOMPLEX *c0, *c1;
+{
+  int k,kk;
+  double *cr0, *ci0, *cr1, *ci1, r1, fi1;
+
+  cr0 = &(c0[0].re);
+  ci0 = &(c0[0].im);
+  cr1 = &(c1[0].re);
+  ci1 = &(c1[0].im);
+  
+  for(k=0;k<nthpo;k+=2) 
+    {
+      kk = k*2;
+      
+      r1 = cr0[kk] + cr1[kk];
+      cr1[kk] = cr0[kk] - cr1[kk];
+      cr0[kk] = r1;
+      fi1 = ci0[kk] + ci1[kk];
+      ci1[kk] = ci0[kk] - ci1[kk];
+      ci0[kk] = fi1;
+    }
+}
+
+
+/*
+** radix 4 iteration subroutine
+*/
+void
+R4TX(nthpo,c0,c1,c2,c3)
+     DPCOMPLEX *c0, *c1, *c2, *c3;
+{
+  int k,kk;
+  double *cr0, *ci0, *cr1, *ci1, *cr2, *ci2, *cr3, *ci3;
+  double r1,r2,r3,r4,i1,i2,i3,i4;
+
+  cr0 = &(c0[0].re);
+  cr1 = &(c1[0].re);
+  cr2 = &(c2[0].re);
+  cr3 = &(c3[0].re);
+  ci0 = &(c0[0].im);
+  ci1 = &(c1[0].im);
+  ci2 = &(c2[0].im);
+  ci3 = &(c3[0].im);
+  
+  for(k=1;k<=nthpo;k+=4) 
+    {
+      kk = (k-1)*2;  /* real and imag parts alternate */
+      
+      r1 = cr0[kk] + cr2[kk];
+      r2 = cr0[kk] - cr2[kk];
+      r3 = cr1[kk] + cr3[kk];
+      r4 = cr1[kk] - cr3[kk];
+      i1 = ci0[kk] + ci2[kk];
+      i2 = ci0[kk] - ci2[kk];
+      i3 = ci1[kk] + ci3[kk];
+      i4 = ci1[kk] - ci3[kk];
+      cr0[kk] = r1 + r3;
+      ci0[kk] = i1 + i3;
+      cr1[kk] = r1 - r3;
+      ci1[kk] = i1 - i3;
+      cr2[kk] = r2 - i4;
+      ci2[kk] = i2 + r4;
+      cr3[kk] = r2 + i4;
+      ci3[kk] = i2 - r4;
+    }
+}
+
+
+	
+/*
+** radix 8 iteration subroutine
+*/
+void
+R8TX(nxtlt,nthpo,lengt,cc0,cc1,cc2,cc3,cc4,cc5,cc6,cc7)
+     DPCOMPLEX *cc0,*cc1,*cc2,*cc3,*cc4,*cc5,*cc6,*cc7;
+{
+  int j,k,kk;
+  double scale, arg, tr, ti;
+  double c1,c2,c3,c4,c5,c6,c7;
+  double s1,s2,s3,s4,s5,s6,s7;
+  double ar0,ar1,ar2,ar3,ar4,ar5,ar6,ar7;
+  double ai0,ai1,ai2,ai3,ai4,ai5,ai6,ai7;
+  double br0,br1,br2,br3,br4,br5,br6,br7;
+  double bi0,bi1,bi2,bi3,bi4,bi5,bi6,bi7;
+  
+  double *cr0,*cr1,*cr2,*cr3,*cr4,*cr5,*cr6,*cr7;
+  double *ci0,*ci1,*ci2,*ci3,*ci4,*ci5,*ci6,*ci7;
+
+  cr0 = &(cc0[0].re);
+  cr1 = &(cc1[0].re);
+  cr2 = &(cc2[0].re);
+  cr3 = &(cc3[0].re);
+  cr4 = &(cc4[0].re);
+  cr5 = &(cc5[0].re);
+  cr6 = &(cc6[0].re);
+  cr7 = &(cc7[0].re);
+
+  ci0 = &(cc0[0].im);
+  ci1 = &(cc1[0].im);
+  ci2 = &(cc2[0].im);
+  ci3 = &(cc3[0].im);
+  ci4 = &(cc4[0].im);
+  ci5 = &(cc5[0].im);
+  ci6 = &(cc6[0].im);
+  ci7 = &(cc7[0].im);
+
+  
+  scale = TWOPI/lengt;
+
+  for(j=1;j<=nxtlt;j++) 
+    {
+      arg = (j-1)*scale;
+      c1 = cos(arg);
+      s1 = sin(arg);
+      c2 = c1*c1 - s1*s1;
+      s2 = c1*s1 + c1*s1;
+      c3 = c1*c2 - s1*s2;
+      s3 = c2*s1 + s2*c1;
+      c4 = c2*c2 - s2*s2;
+      s4 = c2*s2 + c2*s2;
+      c5 = c2*c3 - s2*s3;
+      s5 = c3*s2 + s3*c2;
+      c6 = c3*c3 - s3*s3;
+      s6 = c3*s3 + c3*s3;
+      c7 = c3*c4 - s3*s4;
+      s7 = c4*s3 + s4*c3;
+
+      for(k=j;k<=nthpo;k+=lengt) 
+	{
+	  kk = (k-1)*2; /* index by twos; re & im alternate */
+	  
+	  ar0 = cr0[kk] + cr4[kk];
+	  ar1 = cr1[kk] + cr5[kk];
+	  ar2 = cr2[kk] + cr6[kk];
+	  ar3 = cr3[kk] + cr7[kk];
+	  ar4 = cr0[kk] - cr4[kk];
+	  ar5 = cr1[kk] - cr5[kk];
+	  ar6 = cr2[kk] - cr6[kk];
+	  ar7 = cr3[kk] - cr7[kk];
+	  ai0 = ci0[kk] + ci4[kk];
+	  ai1 = ci1[kk] + ci5[kk];
+	  ai2 = ci2[kk] + ci6[kk];
+	  ai3 = ci3[kk] + ci7[kk];
+	  ai4 = ci0[kk] - ci4[kk];
+	  ai5 = ci1[kk] - ci5[kk];
+	  ai6 = ci2[kk] - ci6[kk];
+	  ai7 = ci3[kk] - ci7[kk];
+	  br0 = ar0 + ar2;
+	  br1 = ar1 + ar3;
+	  br2 = ar0 - ar2;
+	  br3 = ar1 - ar3;
+	  br4 = ar4 - ai6;
+	  br5 = ar5 - ai7;
+	  br6 = ar4 + ai6;
+	  br7 = ar5 + ai7;
+	  bi0 = ai0 + ai2;
+	  bi1 = ai1 + ai3;
+	  bi2 = ai0 - ai2;
+	  bi3 = ai1 - ai3;
+	  bi4 = ai4 + ar6;
+	  bi5 = ai5 + ar7;
+	  bi6 = ai4 - ar6;
+	  bi7 = ai5 - ar7;
+	  cr0[kk] = br0 + br1;
+	  ci0[kk] = bi0 + bi1;
+	  if(j>1) 
+	    {
+	      cr1[kk] = c4*(br0-br1) - s4*(bi0-bi1);
+	      cr2[kk] = c2*(br2-bi3) - s2*(bi2+br3);
+	      cr3[kk] = c6*(br2+bi3) - s6*(bi2-br3);
+	      ci1[kk] = c4*(bi0-bi1) + s4*(br0-br1);
+	      ci2[kk] = c2*(bi2+br3) + s2*(br2-bi3);
+	      ci3[kk] = c6*(bi2-br3) + s6*(br2+bi3);
+	      tr = IRT2*(br5-bi5);
+	      ti = IRT2*(br5+bi5);
+	      cr4[kk] = c1*(br4+tr) - s1*(bi4+ti);
+	      ci4[kk] = c1*(bi4+ti) + s1*(br4+tr);
+	      cr5[kk] = c5*(br4-tr) - s5*(bi4-ti);
+	      ci5[kk] = c5*(bi4-ti) + s5*(br4-tr);
+	      tr = -IRT2*(br7+bi7);
+	      ti = IRT2*(br7-bi7);
+	      cr6[kk] = c3*(br6+tr) - s3*(bi6+ti);
+	      ci6[kk] = c3*(bi6+ti) + s3*(br6+tr);
+	      cr7[kk] = c7*(br6-tr) - s7*(bi6-ti);
+	      ci7[kk] = c7*(bi6-ti) + s7*(br6-tr);
+	    }
+	  else 
+	    {
+	      cr1[kk] = br0 - br1;
+	      cr2[kk] = br2 - bi3;
+	      cr3[kk] = br2 + bi3;
+	      ci1[kk] = bi0 - bi1;
+	      ci2[kk] = bi2 + br3;
+	      ci3[kk] = bi2 - br3;
+	      tr = IRT2*(br5-bi5);
+	      ti = IRT2*(br5+bi5);
+	      cr4[kk] = br4 + tr;
+	      ci4[kk] = bi4 + ti;
+	      cr5[kk] = br4 - tr;
+	      ci5[kk] = bi4 - ti;
+	      tr = -IRT2*(br7+bi7);
+	      ti = IRT2*(br7-bi7);
+	      cr6[kk] = br6 + tr;
+	      ci6[kk] = bi6 + ti;
+	      cr7[kk] = br6 - tr;
+	      ci7[kk] = bi6 - ti;
+	    }
+	}
+    }
+}
+	
+
+/* see if exactly one bit is set in integer argument */
+int
+power_of_2(n)
+{
+  int bits=0;
+  while(n) {
+    bits += n & 1;
+    n >>= 1;
+  }
+  return(bits==1);
+}
+
+/* get binary log of integer argument; exact if n a power of 2 */
+int
+fastlog2(n)
+{
+  int log = -1;
+  while(n) {
+    log++;
+    n >>= 1;
+  }
+  return(log);
+}
+
+
+
+/*  allocate space for stageBuff */
+int
+allocateBuffer(size)
+     int size;
+{
+
+  stageBuff = (DPCOMPLEX*) malloc(size*sizeof(DPCOMPLEX));
+  if(stageBuff==(DPCOMPLEX*)NULL) 
+    {
+      handle_error("Insufficient storage for fft buffers");
+      return(ERROR);
+    }
+  else return(NO_ERROR);
+}
+
+/*  free space for stageBuff */
+void
+freeBuffer()
+{
+    free((char*)stageBuff);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define SIZE 256*256
+int i,j,k1;
+
+//typedef struct {float re; float im;} COMPLEX;
+
+int main(int argc, char *argv[])
+{
+	//char imagen[] = "ImagenF.raw";
+	//char filtro[] = argv[1];
+	//char imagen_out[] = "out_LP_60.raw";
+	FILE *f_in;
+	FILE *f_filtro;
+	FILE *f_out;
+
+	//scanf("%s",filtro);
+	//scanf("%s",imagen_out);
+
+
+	/*Recordar que el programa se ejecuta como a.exe filtro.raw salida.raw entrada.raw*/
+
+	float *b_filtro, *buf_float, *mod, *real, *imag;
+	unsigned char *b_in, *b_out;
+	COMPLEX *buf_c;
+
+
+
+	/*Imagen de entrada*/
+	if((f_in = fopen(argv[3],"rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input image\n");
+		exit(1);
+	}
+
+	if((f_filtro = fopen(argv[1],"rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open filter image\n");
+		exit(1);
+	}
+
+	/* Reserva espacio para filtro de entrada */
+	if((b_filtro = (float *)malloc(SIZE*sizeof(float))) == NULL)
+	{
+		fprintf(stderr,"ERROR mod\n");
+		exit(1);
+	}
+
+	/* Reserva espacio para leer imagen de entrada */
+	if((b_in = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR buf2\n");
+		exit(1);
+	}
+
+	/* Reserva espacio para crear imagen compleja */
+	if((buf_float = (float *)malloc(SIZE*sizeof(COMPLEX))) == NULL)
+	{
+		fprintf(stderr,"ERROR buf2\n");
+		exit(1);
+	}
+
+
+
+/* Imagen de salida */
+	/* Reserva espacio para parte, real, imaginaria y modulo */
+	if((real = (float *)malloc(SIZE*sizeof(float))) == NULL)
+	{
+		fprintf(stderr,"ERROR real\n");
+		exit(1);
+	}
+
+	if((imag = (float *)malloc(SIZE*sizeof(float))) == NULL)
+	{
+		fprintf(stderr,"ERROR imag\n");
+		exit(1);
+	}
+
+	if((mod = (float *)malloc(SIZE*sizeof(float))) == NULL)
+	{
+		fprintf(stderr,"ERROR mod\n");
+		exit(1);
+	}
+
+	if((b_out = (unsigned char *)malloc(SIZE*sizeof(char))) == NULL)
+	{
+		fprintf(stderr,"ERROR mod\n");
+		exit(1);
+	}
+
+
+	/* Lee imagen de entrada */
+	if((fread(b_in,sizeof(char),SIZE+1,f_in)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't read file A\n");
+		exit(1);
+	}
+	fclose(f_in);
+
+	/* Lee filtro */
+	if((fread(b_filtro,sizeof(float),SIZE,f_filtro)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't read filter\n");
+		exit(1);
+	}
+	fclose(f_filtro);
+
+
+/* Crea imagen compleja */
+/* Lee imagen de entrada en parte real y hace parte imaginaria = 0 */
+	k1 = 0;
+
+	for(i=0;i<SIZE;i++)
+	{
+		buf_float[k1] = (float)b_in[i];
+		buf_float[++k1]= 0.0;
+		k1++;
+	}
+
+free(b_in);
+
+
+
+	buf_c = (COMPLEX *)buf_float;
+
+	forward_fft(buf_c, 256, 256);
+
+	buf_float = (float *)buf_c;
+
+
+	/* multiplicacion por el filtro */
+	k1=0;
+	for(i=0;i<(SIZE);i++)
+	{
+
+		buf_float[k1] = buf_float[k1]*b_filtro[i];
+		k1++;
+		buf_float[k1] = buf_float[k1]*b_filtro[i];
+		k1++;
+	}
+
+	buf_c = (COMPLEX *)buf_float;
+
+	inverse_fft(buf_c, 256, 256);
+
+	buf_float = (float *)buf_c;
+
+	/* Separación de imagen filtrada en partes real, imaginaria y modulo */
+	k1=0;
+	for(i=0;i<SIZE;i++)
+	{
+		real[i] = buf_float[k1];
+		imag[i] = buf_float[++k1];
+		mod[i] = sqrt(real[i]*real[i] + imag[i]*imag[i]);
+		k1++;
+	}
+
+	/*Escaleo*/
+	float max = 10;
+	float min = 0;
+	for (int i = 0; i<SIZE; i++)
+	{
+		if (real[i]<min)
+		{
+			min = real[i];
+		}
+		if (real[i]>max)
+		{
+			max = real[i];
+		}
+	}
+	float aux = 0;
+	for (int i = 0; i<SIZE; i++)
+	{
+		aux = (real[i] - min)*254.0/(max-min);
+		real[i] = aux;
+	}
+
+	/*Casting*/
+	for(int i=0; i<SIZE; i++)
+	{
+		b_out[i] = (unsigned char)real[i];
+	}
+
+free(buf_float);
+
+
+/*Escritura de imagen*/
+	if((f_out = fopen(argv[2],"wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open output file\n");
+		exit(1);
+	}
+
+	/* elegir real, imag o mod */
+	if((fwrite(b_out,sizeof(char),SIZE,f_out)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write output file\n");
+		exit(1);
+	}
+	fclose(f_out);
+
+	free(real);
+	free(imag);
+	free(mod);
+	return 0;
+}
