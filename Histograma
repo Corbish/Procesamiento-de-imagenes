@@ -1,0 +1,362 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<math.h>
+
+#define SIZE 512*512  /* declara el tamaño de imagen */
+
+/*Funciones*/
+int acumulada(int [], int, int);
+void histograma(int [], unsigned short *, int);
+void frecuencia(int[], unsigned short *, int);
+void histograma_8bit(int [], unsigned char *, int);
+void frecuencia_8bit(int[], unsigned char *, int);
+void ecualizacion(int [], int[], int);
+int func1(int);
+int func2(int);
+int func3(int);
+
+/*Variables*/
+int histo1[65536];
+int histo2[1200];
+int histo1_8bit[256];
+int histo2_8bit[256];
+int acum[2805];
+int acum_8bit[256];
+
+int main()
+{
+	/* punteros a archivos de entrada y salida */
+	FILE *fp1;		
+	FILE *fp2;
+	FILE *fp3;
+	FILE *fp4;
+	FILE *fp5;
+	FILE *fp6;
+	unsigned short *buf1; /* definir un puntero a caracter */
+	unsigned short *buf2;
+	unsigned short *buf3;
+	unsigned char *buf4;
+	unsigned char *buf5;
+	unsigned char *buf6;
+
+	/* Abrir archivo de entrada */
+	if((fp1 = fopen("imgD_hp_3.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}                        
+
+	/* Reservar memoria para imagen de entrada*/
+	if((buf1 = (unsigned short *)malloc(SIZE*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Reservar memoria para imagen de salida*/
+	if((buf2 = (unsigned short *)malloc(SIZE*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf3 = (unsigned short*)malloc(SIZE*sizeof(short))) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf4 = (unsigned char*)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf5 = (unsigned char*)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf6 = (unsigned char*)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Leer archivo de entrada */
+	/*Imagen D*/
+	if((fread(buf1,sizeof(short),SIZE,fp1)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fp1);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*Punto A*/
+	/*Histograma y ecualizacion*/
+		/* Funcion probabilidad*/
+	void frecuencia(int arr[], unsigned short *punt, int r)
+	{
+		int k = 0;
+		for (int i=0; i<SIZE; i++)
+		{
+			if (punt[i] == r)
+			{
+			k++;
+			arr[r] = k;
+			}
+		}
+	}
+
+	/* Funcion histograma*/
+	void histograma(int arr[], unsigned short *punt, int scale)
+	{
+		for(int i=0;i<scale;i++)
+			{
+			frecuencia(arr, punt,i);
+			}
+	}
+
+ 	/* Funcion acumulada */
+ 	int acumulada(int arr[], int k, int scale)
+ 	{
+ 		int ac = 0;
+ 		int n = SIZE;
+ 		for (int i=0; i<=k; i++)
+ 		{
+ 			ac = ac + arr[i];
+ 		} 		
+ 		ac = (int) scale*1.0*ac/n;
+ 		return ac;
+ 	}
+
+ 	/* Función ecualización de la imagen*/
+ 	void ecualizacion(int arr1[], int arr2[], int scale)
+ 	{
+ 		for (int i=0; i<scale; i++)
+ 		{
+ 			arr1[i] = acumulada(arr2,i,scale);
+ 		}
+ 	}
+
+ 	/* Genero el histograma imagen original y ecualizo*/
+ 	
+	histograma(histo1, buf1, 65536);
+ 	ecualizacion(acum, histo1, 2805);	
+
+ 	for(int i=0; i<SIZE; i++)
+ 	{
+ 		if (buf1[i]>=2805)
+ 		{
+ 			buf1[i] = 2805;
+ 		}
+ 		buf2[i] = acum[buf1[i]];
+ 	}
+ 
+
+ //	histograma(histo2, buf2, 1200);
+
+
+ 	/* Gráfica de histogramas*/
+/* 
+ 	FILE *datos = fopen("histogramas2.txt", "w");
+ 	for(int i=0; i<65536; i++)
+ 	{
+ 		fprintf(datos, "%d\t %d\n", i, histo1[i]);
+ 	}
+ 	fclose(datos);
+ 	system("gnuplot -p histogramas2.gnu");
+
+ 	FILE *datos_ec = fopen("histogramas_ec2.txt", "w");
+ 	for(int i=0; i<1200; i++)
+ 	{
+ 		fprintf(datos_ec, "%d\t %d\n", i, histo2[i]);
+ 	}
+ 	fclose(datos_ec);
+ 	system("gnuplot -p histogramas_ec2.gnu"); 
+*/ 	/*la p es de persistencia*/
+
+ 	/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Punto B */
+/*	int func1 (int val)
+	{
+		if (val <= 1140 && val >= 1010)
+		{
+			return exp(val*1.0/100);
+		}else if (val > 1140){
+			return 200;
+		}else if (val < 1010){
+			return 200;
+		}
+	}
+*//* Genero ventana*/
+
+/*	for (int i=0; i<SIZE; i++)
+	{
+		buf3[i] = func1(buf1[i]);
+	}
+*/
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Punto C */
+	/* Reducir la imagen a 8 bits*/
+/*	int func2(int val)
+	{
+		if(val>=1200)
+		{
+			val = 255;
+		}
+		return val*255.0/1200;
+	}
+
+	for (int i=0; i<SIZE; i++)
+	{
+		buf4[i] = func2(buf1[i]);
+	}
+
+*/	/*Repetir punto A */
+	/* Función frecuencia*/
+	void frecuencia_8bit(int arr[], unsigned char *punt, int r)
+	{
+		int k = 0;
+		for (int i=0; i<SIZE; i++)
+		{
+			if (punt[i] == r)
+			{
+			k++;
+			arr[r] = k;
+			}
+		}
+	}
+
+	/* Funcion histograma*/
+	void histograma_8bit(int arr[], unsigned char *punt, int scale)
+	{
+		for(int i=0;i<scale;i++)
+			{
+			frecuencia_8bit(arr, punt,i);
+			}
+	}
+
+/*	histograma_8bit(histo1_8bit, buf4, 256);
+ 	ecualizacion(acum_8bit, histo1_8bit, 256);	
+
+ 	for(int i=0; i<SIZE; i++)
+ 	{
+ 		buf5[i] = acum_8bit[buf4[i]];
+ 	}
+*/
+ //	histograma_8bit(histo2_8bit, buf5, 256);
+
+
+ 	/* Gráfica de histogramas*/
+/*
+ 	FILE *datos1 = fopen("histogramas_8bit.txt", "w");
+ 	for(int i=0; i<256; i++)
+ 	{
+ 		fprintf(datos1, "%d\t %d\t %d\n", i, histo1_8bit[i], histo2_8bit[i]);
+ 	}
+ 	fclose(datos1);
+ 	system("gnuplot -p histogramas_8bit.gnu");
+
+*/ 	/*la p es de persistencia*/
+
+
+ 	/* Repetir punto B */
+ 	int func3 (int val)
+	{
+		
+		if (val <= 240 && val >= 210)
+		{
+			return 6.8*val-1385;
+		}else if (val<210){		
+			return 20;
+		}else if (val>240){
+			return 20;
+		}
+	} 
+
+	/* Genero imagen nueva*/
+/*	for (int i=0; i<SIZE; i++)
+	{
+		buf6[i] = func3(buf4[i]);
+	}
+*/
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	/* Abrir archivo de salida */
+	if((fp2 = fopen("img_ec_hp.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp3 = fopen("img_ventana.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp4 = fopen("img_8bit.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp5 = fopen("img_8bit_ec.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp6 = fopen("img_8bit_ventana.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	/* Escribir archivo de salida */
+	if((fwrite(buf2,sizeof(short),SIZE,fp2)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp2);
+
+	if((fwrite(buf3,sizeof(short),SIZE,fp3)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp3);
+
+	if((fwrite(buf4,sizeof(char),SIZE,fp4)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp4);
+
+	if((fwrite(buf5,sizeof(char),SIZE,fp5)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp5);
+
+	if((fwrite(buf6,sizeof(char),SIZE,fp6)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp6);
+return 0;
+}
