@@ -1,0 +1,319 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<math.h>
+
+#define SIZE 256*256  /* declara el tamaño de imagen */
+
+/*Funciones*/
+int acumulada(int);
+void histograma(int [], unsigned char *);
+void frecuencia(int[], unsigned char *, int);
+void equalizacion();
+int func1(int);
+int func2(int);
+int func3(int);
+
+/*Variables*/
+int histo1[256];
+int histo2[256];
+int acum[256];
+
+int main()
+{
+
+	/* punteros a archivos de entrada y salida */
+	FILE *fp1;
+	FILE *fp2;
+	FILE *fp3;
+	FILE *fp4;
+	FILE *fp5;
+	FILE *fp6;
+	FILE *fp7;
+	unsigned char *buf1; /* definir un puntero a caracter */
+	unsigned char *buf2;
+	unsigned char *buf3;
+	unsigned char *buf4;
+	unsigned char *buf5;
+	unsigned char *buf6;
+	unsigned char *buf7;
+
+
+
+
+	/* Abrir archivo de entrada */
+	if((fp1 = fopen("Imagen_filtro_HP.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+	if((fp7 = fopen("ImagenB.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+	/* Reservar memoria para imagen de entrada*/
+	if((buf1 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf7 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Reservar memoria para imagen de salida*/
+	if((buf2 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf3 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf4 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf5 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((buf6 = (unsigned char *)malloc(SIZE)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Leer archivo de entrada */
+	/*Imagen A*/
+	if((fread(buf1,sizeof(char),SIZE,fp1)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fp1);
+
+	/*Imagen B*/
+/*	if((fread(buf7,sizeof(char),SIZE,fp7)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fp7);*/
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Punto A y B */
+
+	/* Funcion probabilidad*/
+	void frecuencia(int arr[], unsigned char *punt, int r)
+	{
+		int k = 0;
+		for (int i=0; i<SIZE; i++)
+		{
+			if (punt[i] == r)
+			{
+			k++;
+			arr[r] = k;
+			}
+		}
+	}
+
+	/* Funcion histograma*/
+	void histograma(int arr[], unsigned char *punt)
+	{
+		for(int i=0;i<256;i++)
+			{
+			frecuencia(arr, punt,i);
+			}
+	}
+
+	/* Genero el histograma imagen original*/
+	histograma(histo1, buf1);
+ 	
+ 	/* Funcion acumulada */
+ 	int acumulada(int k)
+ 	{
+ 		int ac = 0;
+ 		int n = SIZE;
+ 		for (int i=0; i<=k; i++)
+ 		{
+ 			ac = ac + histo1[i];
+ 		} 		
+ 		ac = (int) 256*1.0*ac/n;
+ 		return ac;
+ 	}
+
+ 	/* Función ecualización de la imagen*/
+ 	void ecualizacion()
+ 	{
+ 		for (int i=0; i<256; i++)
+ 		{
+ 			acum[i] = acumulada(i);
+ 		}
+ 	}
+
+ 	/* Ecualizo la imagen*/
+ 	ecualizacion();	
+
+ 	for(int i=0; i<SIZE; i++)
+ 	{
+ 		buf2[i] = acum[buf1[i]];
+ 	}
+
+    /* Genero histograma ecualizado*/
+ 	//histograma(histo2, buf2);
+
+ 	/* Grafica de histogramas*/
+ /*	FILE *datos = fopen("histogramas.txt", "w");
+ 	for(int i=0; i<256; i++)
+ 	{
+ 		fprintf(datos, "%d\t %d\t %d\n", i, histo1[i], histo2[i]);
+ 	}
+ 	fclose(datos);
+ 	system("gnuplot -p histogramas.gnu"); */
+ /////////////////////////////////////////////////////////////////////////////////////////////////////////
+ 	/* Punto C */
+ 	/*Funciones*/
+ 	int func1(int r)
+ 	{
+ 		int s;
+ 		r = abs(r);
+ 		if (r>0 && r<128)
+ 		{
+ 			s = 255;
+ 		}else{
+ 			s = 0;
+ 		}
+ 		return s;
+ 	}
+
+ 	int func2(int r)
+ 	{
+ 		int s = 50*log10(1 + abs(r));
+ 		return s;
+ 	}
+
+
+	int func3(int r)
+ 	{
+ 		int s = (int) 148*exp(1.0*abs(r)/120)-148;
+ 		return s;
+ 	}
+
+
+ 	/*Imagenes*/
+ /*	for(int i=0; i<SIZE; i++)
+ 	{
+ 		buf3[i] = func1(buf1[i]);
+ 	}
+
+  	for(int i=0; i<SIZE; i++)
+ 	{
+ 		buf4[i] = func2(buf1[i]);
+ 	}
+
+  	for(int i=0; i<SIZE; i++)
+ 	{
+ 		buf5[i] = func3(buf4[i]);
+ 	}*/
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ 	/*Punto D */
+/* 	for(int i=1; i<SIZE; i++)
+ 	{
+ 		if (buf7[i] > buf1[i])
+ 		{
+ 			buf6[i] = 0;
+ 		}else{
+ 			buf6[i] = buf1[i] - buf7[i];		
+ 		}
+ 
+ 	}*/
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/* Abrir archivo de salida */
+	if((fp2 = fopen("imgecualizada.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+/*	if((fp3 = fopen("imagentransf1.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp4 = fopen("imagentransf2.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp5 = fopen("imagentransf3.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fp6 = fopen("imagenResta.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}*/
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	/* Escribir archivo de salida */
+	if((fwrite(buf2,sizeof(char),SIZE,fp2)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp2);
+
+/*	if((fwrite(buf3,sizeof(char),SIZE,fp3)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp3);
+
+	if((fwrite(buf4,sizeof(char),SIZE,fp4)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp4);
+
+	if((fwrite(buf5,sizeof(char),SIZE,fp5)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp5);
+
+	if((fwrite(buf6,sizeof(char),SIZE,fp6)) != SIZE)
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fp6);*/
+
+	return 0;
+}
