@@ -1,0 +1,341 @@
+#include<stdio.h>	/* definir un puntero a caracter */
+#include<stdlib.h>
+#include<math.h>
+
+#define SIZE1 181*217
+#define SIZE1_P3 183*219
+
+int temp_a[SIZE1];
+/*Funciones*/
+void padd_zero(int, int, int, unsigned char *, unsigned char *);
+void f_Roberts(int, int, int, int*, unsigned char *, unsigned char * );
+void f_Prewitt(int, int, int, int*, unsigned char *, unsigned char * );
+void f_Sobel(int, int, int, int *, unsigned char *, unsigned char * );
+
+int main()
+{
+
+	/* punteros a archivos de entrada y salida */
+	FILE *fpA;
+	FILE *fpA3_R;
+	FILE *fpA3_P;
+	FILE *fpA3_S;
+
+	/* definir un puntero a caracter */
+	unsigned char *bufA; 
+	unsigned char *bufA3_R;
+	unsigned char *bufA3_P;
+	unsigned char *bufA3_S;
+
+	unsigned char *b_padd_3;
+
+		/* Abrir archivo de entrada */
+	if((fpA = fopen("ImagenA.raw","rb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open input file\n");
+		exit(1);
+	}
+
+		/* Reservar memoria para imagen de entrada*/
+	/*Imagen A*/
+	if((bufA = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA3_R = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA3_P = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((bufA3_S = (unsigned char *)malloc(SIZE1)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	if((b_padd_3 = (unsigned char *)malloc(SIZE1_P3)) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't allocate memory\n");
+		exit(1);
+	}
+
+	/* Leer archivo de entrada*/
+
+	if((fread(bufA,sizeof(char),SIZE1,fpA)) != SIZE1)
+	{
+		fprintf(stderr,"ERROR: can't read input file\n");
+		exit(1);
+	}
+	fclose(fpA);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*Funciones*/
+
+	/*Función Padding 8 bits*/
+	void padd_zero(int m, int n, int d, unsigned char *padd, unsigned char *img)
+	{
+		int t = (d-1)/2;
+		for(int i=0; i<(m*n); i++)
+		{
+			padd[i]=255;
+		}
+
+		for (int i=0; i<(m*t); i++)
+		{
+			padd[i] = 0;
+		}
+
+		int k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=0; i<t; i++)
+			{
+				padd[i+k] =0;	
+			}
+		}
+
+		for (int i=(m*n-m*t); i<(m*n); i++)
+		{
+			padd[i] = 0;
+		}
+
+		k = 0;
+		for (int j=0; j<n; j++)
+		{
+			k = j*m;
+			for(int i=m-t; i<m; i++)
+			{
+				padd[i+k] = 0;
+			}
+		}
+
+		k = 0;
+		for (int i=0; i<m*n; i++)
+		{
+			if(padd[i]==255)
+			{
+				padd[i] = img[k];
+				k++;
+			}
+			if (k == SIZE1)
+			{
+				break;
+			}
+		}
+	}
+
+	/*Filtro Gradiente Roberts*/
+	void f_Roberts(int m, int n, int d, int *temp, unsigned char *padd, unsigned char * img_f)
+	{
+		int a = (d-1)/2;
+		int k_m = 0;
+		int R_x[9] = {-1,0,0,0,1,0,0,0,0};
+		int R_y[9] = {0,0,0,0,1,0,-1,0,0};
+		for(int t = a; t<(n-a); t++)	//Va saltando filas hasta la n-ésima
+		{
+			int c = t*m;
+			for(int k=a+c; k<(m-a+c); k++)		//Va recorriendo la fila cuyo indice es t
+			{
+				int aux;
+				int aux_x = 0;
+				int aux_y = 0;
+				int cont = 0;
+				for(int i=-a; i<=a; i++)	//Permite recorrer el filtro por filas
+				{
+					for(int j=(-a*m); j<=(a*m); j+=m)	//Permite recorrer el filtro por columnas
+					{
+						aux_x = aux_x + R_x[cont]*padd[k+j+i];
+						aux_y = aux_y + R_y[cont]*padd[k+j+i];
+						cont++;
+					}
+				}		
+				aux = abs(aux_x) + abs(aux_y);
+				temp[k_m] = aux;
+				k_m++;
+			}
+		}
+		int min = temp[0];
+		int max = temp[0];
+		for (int i=0; i<=SIZE1; i++)
+		{	
+			if (temp[i] < min)
+			{
+				min = temp[i];
+			}else if (temp[i] > max)
+			{
+				max = temp[i];
+			}
+		}
+		int elem;
+		for (int i=0; i<SIZE1; i++)
+		{
+			elem = 255.0*(temp[i]-min)/(max - min);
+			img_f[i] = (unsigned char)elem;
+		}
+	}
+
+	/*Filtro Gradiente Prewitt*/
+	void f_Prewitt(int m, int n, int d, int *temp, unsigned char *padd, unsigned char * img_f)
+	{
+		int a = (d-1)/2;
+		int k_m = 0;
+		int P_x[9] = {-1,-1,-1-0,0,0,1,1,1};
+		int P_y[9] = {1,0,-1,1,0,-1,1,0,-1};
+		for(int t = a; t<(n-a); t++)	//Va saltando filas hasta la n-ésima
+		{
+			int c = t*m;
+			for(int k=a+c; k<(m-a+c); k++)		//Va recorriendo la fila cuyo indice es t
+			{
+				int aux;
+				int aux_x = 0;
+				int aux_y = 0;
+				int cont = 0;
+				for(int i=-a; i<=a; i++)	//Permite recorrer el filtro por filas
+				{
+					for(int j=(-a*m); j<=(a*m); j+=m)	//Permite recorrer el filtro por columnas
+					{
+						aux_x = aux_x + P_x[cont]*padd[k+j+i];
+						aux_y = aux_y + P_y[cont]*padd[k+j+i];
+						cont++;
+					}
+				}		
+				aux = abs(aux_x) + abs(aux_y);
+				temp[k_m] = aux;
+				k_m++;
+			}
+		}
+		int min = temp[0];
+		int max = temp[0];
+		for (int i=0; i<=SIZE1; i++)
+		{	
+			if (temp[i] < min)
+			{
+				min = temp[i];
+			}else if (temp[i] > max)
+			{
+				max = temp[i];
+			}
+		}
+		int elem;
+		for (int i=0; i<SIZE1; i++)
+		{
+			elem = 255.0*(temp[i] - min)/(max - min);
+			img_f[i] = (unsigned char)elem;
+		}
+	}
+
+	/*Filtro Gradiente Sobel*/
+	void f_Sobel(int m, int n, int d, int *temp, unsigned char *padd, unsigned char * img_f)
+	{
+		int a = (d-1)/2;
+		int k_m = 0;
+		int S_x[9] = {-1,-2,-1,0,0,0,1,2,1};
+		int S_y[9] = {-1,0,1,-2,0,2,-1,0,1};
+		for(int t = a; t<(n-a); t++)	//Va saltando filas hasta la n-ésima
+		{
+			int c = t*m;
+			for(int k=a+c; k<(m-a+c); k++)		//Va recorriendo la fila cuyo indice es t
+			{
+				int aux;
+				int aux_x = 0;
+				int aux_y = 0;
+				int cont = 0;
+				for(int i=-a; i<=a; i++)	//Permite recorrer el filtro por filas
+				{
+					for(int j=(-a*m); j<=(a*m); j+=m)	//Permite recorrer el filtro por columnas
+					{
+						aux_x = aux_x + S_x[cont]*padd[k+j+i];
+						aux_y = aux_y + S_y[cont]*padd[k+j+i];
+						cont++;
+					}
+				}
+				aux = abs(aux_x) + abs(aux_y);
+				temp[k_m] = aux;
+				k_m++;
+			}
+		}
+		int min = temp[0];
+		int max = temp[0];
+		for (int i=0; i<=SIZE1; i++)
+		{	
+			if (temp[i] < min)
+			{
+				min = temp[i];
+			}else if (temp[i] > max)
+			{
+				max = temp[i];
+			}
+		}
+		int elem;
+		for (int i=0; i<SIZE1; i++)
+		{
+			elem = 255.0*(temp[i] - min)/(max - min);
+			img_f[i] = (unsigned char)elem;
+		}
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/*Aplicacion de funciones*/
+	padd_zero(183,219,3, b_padd_3,bufA);
+	f_Roberts(183,219,3,temp_a,b_padd_3,bufA3_R);
+	f_Sobel(183,219,3,temp_a,b_padd_3,bufA3_S);
+	f_Prewitt(183,219,3,temp_a,b_padd_3,bufA3_P);
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	/*Abrir archivos de salida*/
+	/*Imagen A*/
+	if((fpA3_R = fopen("imgA_Roberts.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpA3_P = fopen("imgA_Prewitt.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	if((fpA3_S = fopen("imgA_Sobel.raw","wb")) == NULL)
+	{
+		fprintf(stderr,"ERROR: can't open file C\n");
+		exit(1);
+	}
+
+	/*Escribir archivo de salida*/
+	/*Imagen A*/
+	if((fwrite(bufA3_R, sizeof(char), SIZE1, fpA3_R) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA3_R);
+
+	if((fwrite(bufA3_S, sizeof(char), SIZE1, fpA3_S) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA3_S);
+
+	if((fwrite(bufA3_P, sizeof(char), SIZE1, fpA3_P) != SIZE1))
+	{
+		fprintf(stderr,"ERROR: can't write file C\n");
+		exit(1);
+	}
+	fclose(fpA3_P);
+	return 0;
+}
